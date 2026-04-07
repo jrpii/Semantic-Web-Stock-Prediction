@@ -49,6 +49,12 @@ def main():
         news_cols = ['article_count', 'weighted_article_count', 'avg_word_count', 'unique_sites']
         df_part[news_cols] = df_part[news_cols].fillna(0)
         
+        # --- ALOSTAD & DAVULCU PAPER APPROACH: News Volume Breakouts ---
+        # Compute 20-period rolling mean and std to detect volume spikes (mu + 2sigma)
+        roll_mean = df_part['article_count'].rolling(window=20, min_periods=1).mean()
+        roll_std = df_part['article_count'].rolling(window=20, min_periods=1).std().fillna(0)
+        df_part['news_breakout'] = ((df_part['article_count'] >= (roll_mean + 2 * roll_std)) & (df_part['article_count'] > 0)).astype(int)
+        
         # Create News-Volatility Interaction Features
         df_part['news_volatility_interaction'] = df_part['weighted_article_count'] * df_part['volatility_10']
         df_part['news_momentum'] = df_part['article_count'] * df_part['return_pct']
@@ -128,6 +134,31 @@ def main():
                 'recall': rec,
                 'accuracy': acc
             })
+            
+            # --- EVALUATE BREAKOUTS ONLY (ALOSTAD AND DAVULCU PAPER FINDING) ---
+            breakout_idx = test_df['news_breakout'] == 1
+            if breakout_idx.sum() > 0:
+                X_test_breakout = X_test_scaled[breakout_idx]
+                y_test_breakout = y_test[breakout_idx]
+                
+                preds_b = model.predict(X_test_breakout)
+                probs_b = model.predict_proba(X_test_breakout)[:, 1] if hasattr(model, 'predict_proba') else model.decision_function(X_test_breakout)
+                
+                auc_b = roc_auc_score(y_test_breakout, probs_b)
+                f1_b = f1_score(y_test_breakout, preds_b, zero_division=0)
+                prec_b = precision_score(y_test_breakout, preds_b, zero_division=0)
+                rec_b = recall_score(y_test_breakout, preds_b, zero_division=0)
+                acc_b = accuracy_score(y_test_breakout, preds_b)
+                
+                results.append({
+                    'dataset': 'BREAKOUTS_ONLY',
+                    'model': model_name,
+                    'roc_auc': auc_b,
+                    'f1': f1_b,
+                    'precision': prec_b,
+                    'recall': rec_b,
+                    'accuracy': acc_b
+                })
             
             # Extract and save Feature Weights / Importances
             if model_name in ['LogisticRegression', 'LinearSVM']:
