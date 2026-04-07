@@ -79,101 +79,106 @@ def main():
         print("No stock data found.")
         return
         
-    df = pd.concat(all_dfs, ignore_index=True)
+    df_all = pd.concat(all_dfs, ignore_index=True)
     
-    # One-Hot Encode Ticker and Interval (context for XGBoost)
-    df = pd.get_dummies(df, columns=['ticker', 'interval_minutes'], dtype=float)
+    # One-Hot Encode Ticker (we will evaluate per interval, so interval encoding is less critical, but we can encode 'ticker' Context)
+    df_all = pd.get_dummies(df_all, columns=['ticker'], dtype=float)
     
-    # Define final features including the newly created dummy columns
-    cat_features = [col for col in df.columns if col.startswith('ticker_') or col.startswith('interval_minutes_')]
+    cat_features = [col for col in df_all.columns if col.startswith('ticker_')]
     final_features = features + cat_features
     
-    train_df = df[df['split'] == 'train']
-    test_df = df[df['split'] == 'test']
+    intervals = df_all['interval_minutes'].unique()
     
-    if len(train_df) == 0 or len(test_df) == 0:
-        print("Skipping due to missing train/test rows.")
-        return
+    for interval in intervals:
+        print(f"\n--- Evaluating Models for Interval: {interval} minutes ---")
+        df = df_all[df_all['interval_minutes'] == interval].copy()
         
-    X_train_scaled = train_df[final_features]
-    y_train = train_df['target_up_next_bar']
-    X_test_scaled = test_df[final_features]
-    y_test = test_df['target_up_next_bar']
-    
-    models = {
-        'LogisticRegression': LogisticRegression(penalty='l1', solver='liblinear', max_iter=2000, C=1.0, random_state=42),
-        'LinearSVM': LinearSVC(penalty='l1', loss='squared_hinge', dual=False, max_iter=3000, C=1.0, random_state=42),
-        'XGBoost': xgb.XGBClassifier(n_estimators=100, learning_rate=0.1, max_depth=5, 
-                                     eval_metric='logloss', random_state=42)
-    }
-    
-    for model_name, model in models.items():
-        try:
-            print(f"Training {model_name} on combined dataset...")
-            model.fit(X_train_scaled, y_train)
-            preds = model.predict(X_test_scaled)
+        train_df = df[df['split'] == 'train']
+        test_df = df[df['split'] == 'test']
+        
+        if len(train_df) == 0 or len(test_df) == 0:
+            print(f"Skipping {interval}m due to missing train/test rows.")
+            continue
             
-            # Proba for ROC-AUC
-            if hasattr(model, 'predict_proba'):
-                probs = model.predict_proba(X_test_scaled)[:, 1]
-            else:
-                probs = model.decision_function(X_test_scaled)
-            
-            auc = roc_auc_score(y_test, probs)
-            f1 = f1_score(y_test, preds, zero_division=0)
-            prec = precision_score(y_test, preds, zero_division=0)
-            rec = recall_score(y_test, preds, zero_division=0)
-            acc = accuracy_score(y_test, preds)
-            
-            results.append({
-                'dataset': 'ALL_COMBINED',
-                'model': model_name,
-                'roc_auc': auc,
-                'f1': f1,
-                'precision': prec,
-                'recall': rec,
-                'accuracy': acc
-            })
-            
-            # --- EVALUATE BREAKOUTS ONLY (ALOSTAD AND DAVULCU PAPER FINDING) ---
-            breakout_idx = test_df['news_breakout'] == 1
-            if breakout_idx.sum() > 0:
-                X_test_breakout = X_test_scaled[breakout_idx]
-                y_test_breakout = y_test[breakout_idx]
+        X_train_scaled = train_df[final_features]
+        y_train = train_df['target_up_next_bar']
+        X_test_scaled = test_df[final_features]
+        y_test = test_df['target_up_next_bar']
+        
+        models = {
+            'LogisticRegression': LogisticRegression(penalty='l1', solver='liblinear', max_iter=2000, C=1.0, random_state=42),
+            'LinearSVM': LinearSVC(penalty='l1', loss='squared_hinge', dual=False, max_iter=3000, C=1.0, random_state=42),
+            'XGBoost': xgb.XGBClassifier(n_estimators=100, learning_rate=0.1, max_depth=5, 
+                                         eval_metric='logloss', random_state=42)
+        }
+        
+        for model_name, model in models.items():
+            try:
+                print(f"Training {model_name} on {interval}m dataset...")
+                model.fit(X_train_scaled, y_train)
+                preds = model.predict(X_test_scaled)
                 
-                preds_b = model.predict(X_test_breakout)
-                probs_b = model.predict_proba(X_test_breakout)[:, 1] if hasattr(model, 'predict_proba') else model.decision_function(X_test_breakout)
+                # Proba for ROC-AUC
+                if hasattr(model, 'predict_proba'):
+                    probs = model.predict_proba(X_test_scaled)[:, 1]
+                else:
+                    probs = model.decision_function(X_test_scaled)
                 
-                auc_b = roc_auc_score(y_test_breakout, probs_b)
-                f1_b = f1_score(y_test_breakout, preds_b, zero_division=0)
-                prec_b = precision_score(y_test_breakout, preds_b, zero_division=0)
-                rec_b = recall_score(y_test_breakout, preds_b, zero_division=0)
-                acc_b = accuracy_score(y_test_breakout, preds_b)
+                auc = roc_auc_score(y_test, probs)
+                f1 = f1_score(y_test, preds, zero_division=0)
+                prec = precision_score(y_test, preds, zero_division=0)
+                rec = recall_score(y_test, preds, zero_division=0)
+                acc = accuracy_score(y_test, preds)
                 
                 results.append({
-                    'dataset': 'BREAKOUTS_ONLY',
+                    'dataset': f'{interval}m_ALL',
                     'model': model_name,
-                    'roc_auc': auc_b,
-                    'f1': f1_b,
-                    'precision': prec_b,
-                    'recall': rec_b,
-                    'accuracy': acc_b
+                    'roc_auc': auc,
+                    'f1': f1,
+                    'precision': prec,
+                    'recall': rec,
+                    'accuracy': acc
                 })
-            
-            # Extract and save Feature Weights / Importances
-            if model_name in ['LogisticRegression', 'LinearSVM']:
-                importances = model.coef_[0]
-            elif model_name == 'XGBoost':
-                importances = model.feature_importances_
-            
-            imp_df = pd.DataFrame({'feature': final_features, 'importance': importances})
-            imp_df.to_csv(f'analysis_outputs/models/ALL_COMBINED_{model_name}_importances.csv', index=False)
-            
-            # Save Model
-            joblib.dump(model, f'analysis_outputs/models/ALL_COMBINED_{model_name}.joblib')
-            
-        except Exception as e:
-            print(f"Error training {model_name}: {e}")
+                
+                # --- EVALUATE BREAKOUTS ONLY (ALOSTAD AND DAVULCU PAPER FINDING) ---
+                breakout_idx = test_df['news_breakout'] == 1
+                if breakout_idx.sum() > 0:
+                    X_test_breakout = X_test_scaled[breakout_idx]
+                    y_test_breakout = y_test[breakout_idx]
+                    
+                    preds_b = model.predict(X_test_breakout)
+                    probs_b = model.predict_proba(X_test_breakout)[:, 1] if hasattr(model, 'predict_proba') else model.decision_function(X_test_breakout)
+                    
+                    auc_b = roc_auc_score(y_test_breakout, probs_b)
+                    f1_b = f1_score(y_test_breakout, preds_b, zero_division=0)
+                    prec_b = precision_score(y_test_breakout, preds_b, zero_division=0)
+                    rec_b = recall_score(y_test_breakout, preds_b, zero_division=0)
+                    acc_b = accuracy_score(y_test_breakout, preds_b)
+                    
+                    results.append({
+                        'dataset': f'{interval}m_BREAKOUTS',
+                        'model': model_name,
+                        'roc_auc': auc_b,
+                        'f1': f1_b,
+                        'precision': prec_b,
+                        'recall': rec_b,
+                        'accuracy': acc_b
+                    })
+                
+                # Extract and save Feature Weights / Importances
+                if model_name in ['LogisticRegression', 'LinearSVM']:
+                    importances = model.coef_[0]
+                elif model_name == 'XGBoost':
+                    importances = model.feature_importances_
+                
+                imp_df = pd.DataFrame({'feature': final_features, 'importance': importances})
+                imp_df.to_csv(f'analysis_outputs/models/{interval}m_{model_name}_importances.csv', index=False)
+                
+                # Save Model
+                joblib.dump(model, f'analysis_outputs/models/{interval}m_{model_name}.joblib')
+                
+            except Exception as e:
+                print(f"Error training {model_name} on {interval}m: {e}")
 
     # Generate Report
     res_df = pd.DataFrame(results)
