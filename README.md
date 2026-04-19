@@ -7,3 +7,8 @@ All stock ticker CSV data in OHLCV format. (Date, Time, Open, High, Low, Close, 
 
 Need to standardize news article times to GMT.
 
+
+Env Setup
+`conda create -n namehere python=3.10
+`conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+`pip install -r requirements.txt
