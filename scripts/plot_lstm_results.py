@@ -1,18 +1,14 @@
 # Plot LSTM interval results (technical vs tech+news).
 # Produces one chart for ALL rows and one for BREAKOUTS rows.
-
 import argparse
 from pathlib import Path
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS_DIR = ROOT / "analysis_outputs" / "reports"
 VIZ_DIR = ROOT / "analysis_outputs" / "visualizations"
-
 
 def _interval_from_dataset(s):
     # "5m_ALL" -> 5, "240m_BREAKOUTS" -> 240

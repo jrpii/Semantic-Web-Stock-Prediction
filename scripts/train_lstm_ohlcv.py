@@ -13,10 +13,11 @@ from sklearn.preprocessing import StandardScaler
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_STOCKS_DIR = ROOT / "analysis_outputs" / "cleaned" / "stocks"
 DEFAULT_NEWS_ALIGNED = ROOT / "analysis_outputs" / "cleaned" / "news" / "news_aligned_by_bar.csv"
+DEFAULT_FINBERT_BY_BAR = ROOT / "analysis_outputs" / "cleaned" / "news" / "news_finbert_by_bar.csv"
 MODELS_DIR = ROOT / "analysis_outputs" / "models"
 LSTM_MODEL_DIR = MODELS_DIR / "lstm"
 LSTM_NEWS_MODEL_DIR = MODELS_DIR / "lstm_news"
-
+LSTM_FINBERT_MODEL_DIR = MODELS_DIR / "lstm_finbert"
 
 class DirectionalLSTM(nn.Module):
     # Simple LSTM classifier for binary direction.
@@ -128,6 +129,98 @@ def merge_news_for_breakout(df: pd.DataFrame, news_path: Path, interval: int) ->
     return merge_news_into_df(df, news_path, interval, include_signal_columns=False)
 
 
+def merge_finbert_into_df(df: pd.DataFrame, finbert_path: Path, interval: int) -> pd.DataFrame:
+    # Merge bar-level FinBERT sentiment features (pos/neg/neu + pos-neg score).
+    # Also computes news_breakout from article_count (same rolling rule as other scripts).
+    if not finbert_path.exists():
+        out = df.copy()
+        out["article_count"] = 0.0
+        out["weighted_article_count"] = 0.0
+        out["finbert_pos"] = 0.0
+        out["finbert_neg"] = 0.0
+        out["finbert_neu"] = 0.0
+        out["finbert_sentiment"] = 0.0
+        out["finbert_strength"] = 0.0
+        out["finbert_confidence"] = 0.0
+        out["finbert_entropy"] = 0.0
+        out["news_breakout"] = np.int64(0)
+        return out
+
+    news = pd.read_csv(finbert_path)
+    news["timestamp_utc"] = pd.to_datetime(news["aligned_bar_utc"], utc=True, errors="coerce")
+    cols_all = [
+        "ticker",
+        "interval_minutes",
+        "timestamp_utc",
+        "article_count",
+        "weighted_article_count",
+        "finbert_pos",
+        "finbert_neg",
+        "finbert_neu",
+        "finbert_sentiment",
+        "finbert_strength",
+        "finbert_confidence",
+        "finbert_entropy",
+    ]
+    cols = [c for c in cols_all if c in news.columns]
+    sub = news.loc[news["interval_minutes"] == interval, cols].copy()
+    out = df.merge(sub, on=["ticker", "interval_minutes", "timestamp_utc"], how="left")
+
+    for col in (
+        "article_count",
+        "weighted_article_count",
+        "finbert_pos",
+        "finbert_neg",
+        "finbert_neu",
+        "finbert_sentiment",
+        "finbert_strength",
+        "finbert_confidence",
+        "finbert_entropy",
+    ):
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
+
+    out = out.sort_values(["ticker", "timestamp_utc"]).reset_index(drop=True)
+    chunks = []
+    for _, g in out.groupby("ticker", sort=False):
+        ac = g["article_count"].astype(float)
+        rm = ac.rolling(20, min_periods=1).mean()
+        rs = ac.rolling(20, min_periods=1).std().fillna(0.0)
+        br = ((ac >= rm + 2 * rs) & (ac > 0)).astype(np.int64)
+        gc = g.copy()
+        gc["news_breakout"] = br.values
+
+        # Extra engineered sentiment features (bar-level, uses past only).
+        s = gc["finbert_sentiment"].astype(float)
+        wac = gc["weighted_article_count"].astype(float)
+        s_ma = s.rolling(20, min_periods=1).mean()
+        s_std = s.rolling(20, min_periods=1).std().fillna(0.0)
+        gc["finbert_sentiment_ma20"] = s_ma.values
+        gc["finbert_sentiment_std20"] = s_std.values
+        gc["finbert_sentiment_mom1"] = (s - s.shift(1).fillna(0.0)).values
+        gc["finbert_sentiment_z20"] = np.where(s_std.to_numpy() > 1e-12, ((s - s_ma) / s_std).to_numpy(), 0.0)
+        gc["finbert_sentiment_vol"] = (s * wac).values
+
+        chunks.append(gc)
+    return pd.concat(chunks, ignore_index=True)
+
+
+def merge_news_volume_cols(df: pd.DataFrame, news_path: Path, interval: int) -> pd.DataFrame:
+    # Merge volume-style news columns (avg_word_count, unique_sites) from aligned_by_bar.csv.
+    if not news_path.exists():
+        out = df.copy()
+        out["avg_word_count"] = 0.0
+        out["unique_sites"] = 0.0
+        return out
+    news = pd.read_csv(news_path)
+    news["timestamp_utc"] = pd.to_datetime(news["aligned_bar_utc"], utc=True, errors="coerce")
+    cols = ["ticker", "interval_minutes", "timestamp_utc", "avg_word_count", "unique_sites"]
+    sub = news.loc[news["interval_minutes"] == interval, cols].copy()
+    out = df.merge(sub, on=["ticker", "interval_minutes", "timestamp_utc"], how="left")
+    out["avg_word_count"] = pd.to_numeric(out["avg_word_count"], errors="coerce").fillna(0.0)
+    out["unique_sites"] = pd.to_numeric(out["unique_sites"], errors="coerce").fillna(0.0)
+    return out
+
+
 def load_frames(stocks_dir: Path, interval: int, tickers: list[str]) -> pd.DataFrame:
     frames = []
     for ticker in tickers:
@@ -167,7 +260,14 @@ def build_feature_matrix(
         X = np.hstack([base, tick_oh]).astype(np.float32)
         return X, names
 
-    if feature_set not in ("extended", "extended_news"):
+    if feature_set not in (
+        "extended",
+        "extended_news",
+        "extended_finbert",
+        "extended_finbert_eng",
+        "extended_news_finbert",
+        "extended_news_finbert_eng",
+    ):
         raise ValueError(f"Unknown feature_set: {feature_set}")
 
     close = np.maximum(df["close"].to_numpy(dtype=np.float64), 1e-9)
@@ -177,6 +277,111 @@ def build_feature_matrix(
     pr = pd.to_numeric(df["price_range"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
     hl_pct = (pr / close).astype(np.float64)
     extra = np.stack([ret, vola, rsi, hl_pct], axis=1).astype(np.float32)
+
+    if feature_set in ("extended_finbert", "extended_finbert_eng"):
+        fp = pd.to_numeric(df["finbert_pos"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        fn = pd.to_numeric(df["finbert_neg"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        fu = pd.to_numeric(df["finbert_neu"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        fs = pd.to_numeric(df["finbert_sentiment"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        st = pd.to_numeric(df["finbert_strength"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        cf = pd.to_numeric(df["finbert_confidence"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        en = pd.to_numeric(df["finbert_entropy"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        ac = pd.to_numeric(df["article_count"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        wac = pd.to_numeric(df["weighted_article_count"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        if feature_set == "extended_finbert_eng":
+            sma = pd.to_numeric(df["finbert_sentiment_ma20"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+            sstd = pd.to_numeric(df["finbert_sentiment_std20"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+            smom = pd.to_numeric(df["finbert_sentiment_mom1"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+            sz = pd.to_numeric(df["finbert_sentiment_z20"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+            svol = pd.to_numeric(df["finbert_sentiment_vol"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+
+            fin_blk = np.stack([fp, fn, fu, fs, st, cf, en, sma, sstd, smom, sz, svol, ac, wac], axis=1).astype(np.float32)
+            fin_names = [
+                "finbert_pos",
+                "finbert_neg",
+                "finbert_neu",
+                "finbert_sentiment",
+                "finbert_strength",
+                "finbert_confidence",
+                "finbert_entropy",
+                "finbert_sentiment_ma20",
+                "finbert_sentiment_std20",
+                "finbert_sentiment_mom1",
+                "finbert_sentiment_z20",
+                "finbert_sentiment_vol",
+                "article_count",
+                "weighted_article_count",
+            ]
+        else:
+            fin_blk = np.stack([fp, fn, fu, fs, ac, wac], axis=1).astype(np.float32)
+            fin_names = [
+                "finbert_pos",
+                "finbert_neg",
+                "finbert_neu",
+                "finbert_sentiment",
+                "article_count",
+                "weighted_article_count",
+            ]
+        names_fin = names + ["return_pct", "volatility_10", "rsi_norm", "hl_pct"] + fin_names
+        X = np.hstack([base, extra, tick_oh, fin_blk]).astype(np.float32)
+        return X, names_fin
+
+    if feature_set in ("extended_news_finbert", "extended_news_finbert_eng"):
+        ac = pd.to_numeric(df["article_count"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        wac = pd.to_numeric(df["weighted_article_count"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        awc = pd.to_numeric(df["avg_word_count"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        us = pd.to_numeric(df["unique_sites"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+
+        fp = pd.to_numeric(df["finbert_pos"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        fn = pd.to_numeric(df["finbert_neg"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        fu = pd.to_numeric(df["finbert_neu"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        fs = pd.to_numeric(df["finbert_sentiment"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        st = pd.to_numeric(df["finbert_strength"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        cf = pd.to_numeric(df["finbert_confidence"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+        en = pd.to_numeric(df["finbert_entropy"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+
+        if feature_set == "extended_news_finbert_eng":
+            sma = pd.to_numeric(df["finbert_sentiment_ma20"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+            sstd = pd.to_numeric(df["finbert_sentiment_std20"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+            smom = pd.to_numeric(df["finbert_sentiment_mom1"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+            sz = pd.to_numeric(df["finbert_sentiment_z20"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+            svol = pd.to_numeric(df["finbert_sentiment_vol"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+
+            blk = np.stack([ac, wac, awc, us, fp, fn, fu, fs, st, cf, en, sma, sstd, smom, sz, svol], axis=1).astype(np.float32)
+            blk_names = [
+                "article_count",
+                "weighted_article_count",
+                "avg_word_count",
+                "unique_sites",
+                "finbert_pos",
+                "finbert_neg",
+                "finbert_neu",
+                "finbert_sentiment",
+                "finbert_strength",
+                "finbert_confidence",
+                "finbert_entropy",
+                "finbert_sentiment_ma20",
+                "finbert_sentiment_std20",
+                "finbert_sentiment_mom1",
+                "finbert_sentiment_z20",
+                "finbert_sentiment_vol",
+            ]
+        else:
+            blk = np.stack([ac, wac, awc, us, fp, fn, fu, fs], axis=1).astype(np.float32)
+            blk_names = [
+                "article_count",
+                "weighted_article_count",
+                "avg_word_count",
+                "unique_sites",
+                "finbert_pos",
+                "finbert_neg",
+                "finbert_neu",
+                "finbert_sentiment",
+            ]
+
+        names_nf = names + ["return_pct", "volatility_10", "rsi_norm", "hl_pct"] + blk_names
+        X = np.hstack([base, extra, tick_oh, blk]).astype(np.float32)
+        return X, names_nf
 
     if feature_set == "extended_news":
         ac = pd.to_numeric(df["article_count"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
@@ -670,7 +875,19 @@ def main():
     parser.add_argument("--stocks-dir", type=Path, default=DEFAULT_STOCKS_DIR)
     parser.add_argument("--interval", type=int, default=60)
     parser.add_argument("--tickers", nargs="+", default=["AAPL", "AMZN"])
-    parser.add_argument("--feature-set", choices=("ohlcv", "extended", "extended_news"), default="extended")
+    parser.add_argument(
+        "--feature-set",
+        choices=(
+            "ohlcv",
+            "extended",
+            "extended_news",
+            "extended_finbert",
+            "extended_finbert_eng",
+            "extended_news_finbert",
+            "extended_news_finbert_eng",
+        ),
+        default="extended",
+    )
     parser.add_argument("--seq-len", type=int, default=64)
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--num-layers", type=int, default=2)
@@ -688,6 +905,7 @@ def main():
     parser.add_argument("--save-model", action="store_true")
     parser.add_argument("--out-model", type=Path, default=None)
     parser.add_argument("--news-aligned", type=Path, default=DEFAULT_NEWS_ALIGNED)
+    parser.add_argument("--finbert-by-bar", type=Path, default=DEFAULT_FINBERT_BY_BAR)
     parser.add_argument("--no-news-merge", action="store_true")
     args = parser.parse_args()
 
@@ -702,7 +920,16 @@ def run_training(args: argparse.Namespace) -> dict[str, object]:
 
     df = load_frames(args.stocks_dir, args.interval, list(args.tickers))
     df = df[~pd.isna(df["target_up_next_bar"])].reset_index(drop=True)
-    if args.feature_set == "extended_news":
+    if args.feature_set in (
+        "extended_finbert",
+        "extended_finbert_eng",
+        "extended_news_finbert",
+        "extended_news_finbert_eng",
+    ):
+        df = merge_finbert_into_df(df, Path(args.finbert_by_bar), args.interval)
+        if args.feature_set in ("extended_news_finbert", "extended_news_finbert_eng"):
+            df = merge_news_volume_cols(df, Path(args.news_aligned), args.interval)
+    elif args.feature_set == "extended_news":
         if args.no_news_merge:
             raise ValueError("feature_set=extended_news requires news merge (do not use --no-news-merge).")
         df = merge_news_into_df(
@@ -716,6 +943,7 @@ def run_training(args: argparse.Namespace) -> dict[str, object]:
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     LSTM_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     LSTM_NEWS_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    LSTM_FINBERT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
     report: dict[str, object] = {
         "interval_minutes": args.interval,
@@ -725,7 +953,16 @@ def run_training(args: argparse.Namespace) -> dict[str, object]:
         "seq_len": args.seq_len,
         "val_fraction": args.val_fraction,
         "early_stopping_patience": args.early_stopping_patience,
-        "news_merged": (not args.no_news_merge) or (args.feature_set == "extended_news"),
+        "news_merged": (not args.no_news_merge) or (
+            args.feature_set
+            in (
+                "extended_news",
+                "extended_news_finbert",
+                "extended_news_finbert_eng",
+                "extended_finbert",
+                "extended_finbert_eng",
+            )
+        ),
     }
 
     X_train, y_train, X_val, y_val = concat_ticker_fit_val_sequences(
@@ -734,9 +971,7 @@ def run_training(args: argparse.Namespace) -> dict[str, object]:
     X_test, y_test, test_br = concat_ticker_sequences(
         df, list(args.tickers), args.seq_len, "test", args.feature_set
     )
-    test_breakout: np.ndarray | None = (
-        test_br if (not args.no_news_merge or args.feature_set == "extended_news") else None
-    )
+    test_breakout: np.ndarray | None = test_br if "news_breakout" in df.columns else None
 
     if len(X_train) == 0 or len(X_test) == 0:
         raise ValueError("Train or test sequences empty; lower seq_len or check data.")
@@ -774,6 +1009,13 @@ def run_training(args: argparse.Namespace) -> dict[str, object]:
     if args.save_model:
         if args.out_model is not None:
             out_model = Path(args.out_model)
+        elif args.feature_set in (
+            "extended_finbert",
+            "extended_finbert_eng",
+            "extended_news_finbert",
+            "extended_news_finbert_eng",
+        ):
+            out_model = LSTM_FINBERT_MODEL_DIR / f"{args.interval}m_LSTM_FINBERT_epoch_{best_epoch}.pt"
         elif args.feature_set == "extended_news":
             out_model = LSTM_NEWS_MODEL_DIR / f"{args.interval}m_LSTM_NEWS_epoch_{best_epoch}.pt"
         else:
