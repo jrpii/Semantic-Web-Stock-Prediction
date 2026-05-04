@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
-REPORTS_DIR = ROOT / "analysis_outputs" / "reports"
-VIZ_DIR = ROOT / "analysis_outputs" / "visualizations"
+ROOT = Path(__file__).resolve().parents[2]
+REPORTS_DIR = ROOT / "EVALUATIONS" / "analysis_outputs" / "reports"
+VIZ_DIR = ROOT / "EVALUATIONS" / "analysis_outputs" / "visualizations"
 
 def _interval_from_dataset(s):
     left = str(s).split("m_", 1)[0]
@@ -141,7 +141,7 @@ def main():
 
     csv_paths = [p for p in csv_paths if p.exists()]
     if not csv_paths:
-        raise FileNotFoundError("No finbert results CSVs found in analysis_outputs/reports/")
+        raise FileNotFoundError("No finbert results CSVs found in EVALUATIONS/analysis_outputs/reports/")
 
     frames = []
     labels = []

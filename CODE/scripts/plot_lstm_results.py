@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
-REPORTS_DIR = ROOT / "analysis_outputs" / "reports"
-VIZ_DIR = ROOT / "analysis_outputs" / "visualizations"
+ROOT = Path(__file__).resolve().parents[2]
+REPORTS_DIR = ROOT / "EVALUATIONS" / "analysis_outputs" / "reports"
+VIZ_DIR = ROOT / "EVALUATIONS" / "analysis_outputs" / "visualizations"
 
 def _interval_from_dataset(s):
     # "5m_ALL" -> 5, "240m_BREAKOUTS" -> 240

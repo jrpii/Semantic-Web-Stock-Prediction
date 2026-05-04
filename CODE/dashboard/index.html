@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Semantic Web Stock Prediction Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">CSE 573 Group 15</p>
+        <h1>Semantic Web Stock Prediction Results</h1>
+      </div>
+      <nav aria-label="Dashboard sections">
+        <a href="#models">Models</a>
+        <a href="#data">Data</a>
+        <a href="#news">News</a>
+        <a href="#reports">Reports</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Directional prediction of AAPL and AMZN</p>
+          <h2>Outputs, model quality, news signals, and report findings in one view.</h2>
+          <p>
+            This dashboard reads the generated files in <code>EVALUATIONS/analysis_outputs</code>,
+            including CSV metrics, cleaned data summaries, markdown reports, and saved plots.
+          </p>
+        </div>
+        <div class="hero-grid" id="kpis" aria-live="polite"></div>
+      </section>
+
+      <section id="models" class="section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Results</p>
+            <h2>Model Performance</h2>
+          </div>
+          <div class="control-row">
+            <label>
+              Metric
+              <select id="metricSelect">
+                <option value="roc_auc">ROC AUC</option>
+                <option value="f1">F1</option>
+                <option value="precision">Precision</option>
+                <option value="recall">Recall</option>
+                <option value="accuracy">Accuracy</option>
+              </select>
+            </label>
+            <label>
+              Dataset
+              <select id="datasetSelect">
+                <option value="ALL">All bars</option>
+                <option value="BREAKOUTS">Breakouts</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="two-column">
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Best Models by Interval</h3>
+              <span id="leaderboardLabel"></span>
+            </div>
+            <div id="leaderboardChart" class="chart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Model Family Comparison</h3>
+              <span>Mean metric score</span>
+            </div>
+            <div id="familyChart" class="chart"></div>
+          </article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h3>Top Ranked Runs</h3>
+            <span>Sorted by selected metric</span>
+          </div>
+          <div id="topRunsTable" class="table-wrap"></div>
+        </article>
+      </section>
+
+      <section id="data" class="section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Cleaned OHLCV</p>
+            <h2>Stock Data Coverage</h2>
+          </div>
+        </div>
+
+        <div class="two-column">
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Rows by Ticker and Interval</h3>
+              <span>Cleaned stock files</span>
+            </div>
+            <div id="stockRowsChart" class="chart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Volatility Profile</h3>
+              <span>Mean bar volatility %</span>
+            </div>
+            <div id="volatilityChart" class="chart"></div>
+          </article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h3>Chronological Splits</h3>
+            <span>80/20 leakage-aware train/test split</span>
+          </div>
+          <div id="splitsTable" class="table-wrap"></div>
+        </article>
+      </section>
+
+      <section id="news" class="section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Semantic Signals</p>
+            <h2>News and FinBERT Sentiment</h2>
+          </div>
+        </div>
+
+        <div class="two-column">
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>News Volume Over Time</h3>
+              <span>Daily article counts</span>
+            </div>
+            <div id="newsChart" class="chart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>FinBERT Sentiment by Ticker</h3>
+              <span>Weighted average by aligned market bar</span>
+            </div>
+            <div id="sentimentChart" class="chart"></div>
+          </article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h3>Generated Visualizations</h3>
+            <span>Saved plots from analysis outputs</span>
+          </div>
+          <div class="plot-grid">
+            <figure>
+              <img src="../../EVALUATIONS/analysis_outputs/charts/AAPL_1440m_price_with_model_predictions.png" alt="AAPL daily price with model predictions" />
+              <figcaption>AAPL price with model predictions</figcaption>
+            </figure>
+            <figure>
+              <img src="../../EVALUATIONS/analysis_outputs/visualizations/lstm_roc_auc_ALL.png" alt="LSTM ROC AUC for all bars" />
+              <figcaption>LSTM ROC AUC, all bars</figcaption>
+            </figure>
+            <figure>
+              <img src="../../EVALUATIONS/analysis_outputs/visualizations/lstm_roc_auc_BREAKOUTS.png" alt="LSTM ROC AUC for breakout bars" />
+              <figcaption>LSTM ROC AUC, breakouts</figcaption>
+            </figure>
+            <figure>
+              <img src="../../EVALUATIONS/analysis_outputs/visualizations/lstm_finbert_roc_auc_ALL.png" alt="LSTM FinBERT ROC AUC for all bars" />
+              <figcaption>LSTM + FinBERT ROC AUC, all bars</figcaption>
+            </figure>
+            <figure>
+              <img src="../../EVALUATIONS/analysis_outputs/visualizations/lstm_finbert_roc_auc_BREAKOUTS.png" alt="LSTM FinBERT ROC AUC for breakout bars" />
+              <figcaption>LSTM + FinBERT ROC AUC, breakouts</figcaption>
+            </figure>
+          </div>
+        </article>
+      </section>
+
+      <section id="reports" class="section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Reports</p>
+            <h2>Generated Findings</h2>
+          </div>
+          <div class="tab-row" id="reportTabs"></div>
+        </div>
+        <article class="panel report-panel">
+          <div id="reportContent"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -5,6 +5,9 @@ from datetime import datetime, timedelta
 import time
 import sys
 
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DATASETS_DIR = ROOT / "DATA" / "datasets"
+
 INTERVAL_SUFFIXES = {5: "5m", 15: "15m", 30: "30m", 60: "1h", 240: "1h", 1440: "1d"}
 MAX_CHUNK_DAYS = {"5m": 55, "15m": 55, "30m": 55, "1h": 700, "1d": 9999}
 YAHOO_LIMITS = {"5m": 59, "15m": 59, "30m": 59, "1h": 729}
@@ -108,7 +111,7 @@ if __name__ == "__main__":
     tickers = sys.argv[1].split(",") if len(sys.argv) > 1 else ["AAPL", "AMZN"]
     start = sys.argv[2] if len(sys.argv) > 2 else "2020-01-01"
     end = sys.argv[3] if len(sys.argv) > 3 else "2024-12-31"
-    root = sys.argv[4] if len(sys.argv) > 4 else "datasets"
+    root = sys.argv[4] if len(sys.argv) > 4 else str(DEFAULT_DATASETS_DIR)
 
     print(f"Collecting OHLCV for {tickers} | {start} to {end}")
     collect(tickers, start, end, root)

@@ -29,13 +29,14 @@ except Exception:
 
 import train_lstm_ohlcv as lstm_module
 
-ROOT = Path(__file__).resolve().parents[1]
-CLEANED_STOCKS_DIR = ROOT / "analysis_outputs" / "cleaned" / "stocks"
-CLEANED_NEWS_FILE = ROOT / "analysis_outputs" / "cleaned" / "news" / "news_aligned_by_bar.csv"
-OUTPUT_DIR = ROOT / "analysis_outputs" / "charts"
-LSTM_MODEL_DIR = ROOT / "analysis_outputs" / "models" / "lstm"
-LSTM_NEWS_MODEL_DIR = ROOT / "analysis_outputs" / "models" / "lstm_news"
-LSTM_FINBERT_MODEL_DIR = ROOT / "analysis_outputs" / "models" / "lstm_finbert"
+ROOT = Path(__file__).resolve().parents[2]
+EVALUATIONS_DIR = ROOT / "EVALUATIONS" / "analysis_outputs"
+CLEANED_STOCKS_DIR = EVALUATIONS_DIR / "cleaned" / "stocks"
+CLEANED_NEWS_FILE = EVALUATIONS_DIR / "cleaned" / "news" / "news_aligned_by_bar.csv"
+OUTPUT_DIR = EVALUATIONS_DIR / "charts"
+LSTM_MODEL_DIR = EVALUATIONS_DIR / "models" / "lstm"
+LSTM_NEWS_MODEL_DIR = EVALUATIONS_DIR / "models" / "lstm_news"
+LSTM_FINBERT_MODEL_DIR = EVALUATIONS_DIR / "models" / "lstm_finbert"
 
 FEATURE_COLUMNS = [
     "volume",

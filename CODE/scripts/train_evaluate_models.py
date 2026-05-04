@@ -2,18 +2,24 @@ import pandas as pd
 import numpy as np
 import os
 import joblib
+from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
 import xgboost as xgb
 from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score, accuracy_score
 
+ROOT = Path(__file__).resolve().parents[2]
+EVALUATIONS_DIR = ROOT / "EVALUATIONS" / "analysis_outputs"
+
 def main():
-    os.makedirs('analysis_outputs/models', exist_ok=True)
-    os.makedirs('analysis_outputs/reports', exist_ok=True)
+    models_dir = EVALUATIONS_DIR / "models"
+    reports_dir = EVALUATIONS_DIR / "reports"
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(reports_dir, exist_ok=True)
 
     # Load News
-    news_df = pd.read_csv('analysis_outputs/cleaned/news/news_aligned_by_bar.csv')
+    news_df = pd.read_csv(EVALUATIONS_DIR / "cleaned" / "news" / "news_aligned_by_bar.csv")
     news_df.rename(columns={'aligned_bar_utc': 'timestamp_utc'}, inplace=True)
 
     # Features and Target
@@ -26,14 +32,14 @@ def main():
     ]
 
     results = []
-    stocks_dir = 'analysis_outputs/cleaned/stocks'
+    stocks_dir = EVALUATIONS_DIR / "cleaned" / "stocks"
     
     print("Loading, merging, and scaling datasets per ticker/interval...")
     all_dfs = []
     for file in sorted(os.listdir(stocks_dir)):
-        if not file.endswith('.csv'): 
+        if not file.endswith('.csv'):
             continue
-        df_part = pd.read_csv(os.path.join(stocks_dir, file))
+        df_part = pd.read_csv(stocks_dir / file)
         
         # Merge news features
         df_part = df_part.merge(news_df, on=['ticker', 'interval_minutes', 'timestamp_utc'], how='left')
@@ -172,10 +178,10 @@ def main():
                     importances = model.feature_importances_
                 
                 imp_df = pd.DataFrame({'feature': final_features, 'importance': importances})
-                imp_df.to_csv(f'analysis_outputs/models/{interval}m_{model_name}_importances.csv', index=False)
+                imp_df.to_csv(models_dir / f'{interval}m_{model_name}_importances.csv', index=False)
                 
                 # Save Model
-                joblib.dump(model, f'analysis_outputs/models/{interval}m_{model_name}.joblib')
+                joblib.dump(model, models_dir / f'{interval}m_{model_name}.joblib')
                 
             except Exception as e:
                 print(f"Error training {model_name} on {interval}m: {e}")
@@ -185,17 +191,17 @@ def main():
     
     # Sort for best output formatting
     res_df = res_df.sort_values(by=['dataset', 'roc_auc'], ascending=[True, False])
-    res_df.to_csv('analysis_outputs/reports/model_results.csv', index=False)
-    
-    with open('analysis_outputs/reports/model_comparison.md', 'w') as f:
+    res_df.to_csv(reports_dir / 'model_results.csv', index=False)
+
+    with open(reports_dir / 'model_comparison.md', 'w') as f:
         f.write("# Model Performance Comparison\n\n")
         f.write("Evaluation of Logistic Regression, Linear SVM, and XGBoost across intervals.\n\n")
         f.write("## Overall Results\n\n")
         f.write(res_df.to_markdown(index=False) + "\n\n")
         f.write("## Transparency and Explainability\n")
-        f.write("Models and their corresponding feature weights (`*importances.csv`) to gauge transparency are saved in `analysis_outputs/models/`.\n")
+        f.write("Models and their corresponding feature weights (`*importances.csv`) to gauge transparency are saved in `EVALUATIONS/analysis_outputs/models/`.\n")
 
-    print(f"\nCompleted modeling for {len(res_df)} model configurations. Report saved to analysis_outputs/reports/model_comparison.md")
+    print(f"\nCompleted modeling for {len(res_df)} model configurations. Report saved to {reports_dir / 'model_comparison.md'}")
 
 if __name__ == "__main__":
     main()

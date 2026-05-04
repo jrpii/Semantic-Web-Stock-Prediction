@@ -15,11 +15,11 @@ from pathlib import Path
 from statistics import mean, median
 
 
-ROOT = Path(__file__).resolve().parents[1]
-DATASETS_DIR = ROOT / "datasets"
+ROOT = Path(__file__).resolve().parents[2]
+DATASETS_DIR = ROOT / "DATA" / "datasets"
 CHARTS_DIR = DATASETS_DIR / "CHARTS"
 NEWS_DIR = DATASETS_DIR / "News"
-OUTPUT_DIR = ROOT / "analysis_outputs"
+OUTPUT_DIR = ROOT / "EVALUATIONS" / "analysis_outputs"
 CLEANED_DIR = OUTPUT_DIR / "cleaned"
 REPORTS_DIR = OUTPUT_DIR / "reports"
 

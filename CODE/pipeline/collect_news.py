@@ -9,6 +9,9 @@ import sys
 import spacy
 import newspaper
 
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DATASETS_DIR = ROOT / "DATA" / "datasets"
+
 GDELT_API = "https://api.gdeltproject.org/api/v2/doc/doc"
 
 TICKER_QUERIES = {
@@ -211,7 +214,7 @@ if __name__ == "__main__":
     tickers = sys.argv[1].split(",") if len(sys.argv) > 1 else ["AAPL", "AMZN"]
     start = sys.argv[2] if len(sys.argv) > 2 else "2020-01-01"
     end = sys.argv[3] if len(sys.argv) > 3 else "2024-12-31"
-    root = sys.argv[4] if len(sys.argv) > 4 else "datasets"
+    root = sys.argv[4] if len(sys.argv) > 4 else str(DEFAULT_DATASETS_DIR)
     max_per_month = int(sys.argv[5]) if len(sys.argv) > 5 else 100
 
     print(f"Collecting news for {tickers} | {start} to {end} | max {max_per_month}/month")

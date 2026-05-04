@@ -10,11 +10,12 @@ import torch.nn as nn
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_STOCKS_DIR = ROOT / "analysis_outputs" / "cleaned" / "stocks"
-DEFAULT_NEWS_ALIGNED = ROOT / "analysis_outputs" / "cleaned" / "news" / "news_aligned_by_bar.csv"
-DEFAULT_FINBERT_BY_BAR = ROOT / "analysis_outputs" / "cleaned" / "news" / "news_finbert_by_bar.csv"
-MODELS_DIR = ROOT / "analysis_outputs" / "models"
+ROOT = Path(__file__).resolve().parents[2]
+EVALUATIONS_DIR = ROOT / "EVALUATIONS" / "analysis_outputs"
+DEFAULT_STOCKS_DIR = EVALUATIONS_DIR / "cleaned" / "stocks"
+DEFAULT_NEWS_ALIGNED = EVALUATIONS_DIR / "cleaned" / "news" / "news_aligned_by_bar.csv"
+DEFAULT_FINBERT_BY_BAR = EVALUATIONS_DIR / "cleaned" / "news" / "news_finbert_by_bar.csv"
+MODELS_DIR = EVALUATIONS_DIR / "models"
 LSTM_MODEL_DIR = MODELS_DIR / "lstm"
 LSTM_NEWS_MODEL_DIR = MODELS_DIR / "lstm_news"
 LSTM_FINBERT_MODEL_DIR = MODELS_DIR / "lstm_finbert"
@@ -869,8 +870,8 @@ def concat_ticker_fit_val_sequences(
 
 
 def main():
-    # Inputs: cleaned stock bars in analysis_outputs/cleaned/stocks
-    # If you use feature_set=extended_news, we merge analysis_outputs/cleaned/news/news_aligned_by_bar.csv.
+    # Inputs: cleaned stock bars in EVALUATIONS/analysis_outputs/cleaned/stocks
+    # If you use feature_set=extended_news, we merge EVALUATIONS/analysis_outputs/cleaned/news/news_aligned_by_bar.csv.
     parser = argparse.ArgumentParser()
     parser.add_argument("--stocks-dir", type=Path, default=DEFAULT_STOCKS_DIR)
     parser.add_argument("--interval", type=int, default=60)

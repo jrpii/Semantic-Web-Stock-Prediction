@@ -1,14 +1,14 @@
 # Run LSTM training across all bar intervals and write a simple CSV report.
 # Output CSV columns match train_evaluate_models.py: dataset, model, roc_auc, f1, precision, recall, accuracy
-# Checkpoints are saved by train_lstm_ohlcv.py under analysis_outputs/models/lstm/ or analysis_outputs/models/lstm_news/.
+# Checkpoints are saved by train_lstm_ohlcv.py under EVALUATIONS/analysis_outputs/models/lstm/ or EVALUATIONS/analysis_outputs/models/lstm_news/.
 import argparse
 import sys
 from pathlib import Path
 import pandas as pd
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = ROOT / "CODE" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
@@ -44,7 +44,7 @@ def main():
     # Common knobs (kept intentionally small; see train_lstm_ohlcv.py for what each does).
     parser = argparse.ArgumentParser()
     parser.add_argument("--intervals", nargs="+", type=int, default=[5, 15, 30, 60, 240, 1440])
-    parser.add_argument("--out-csv", type=Path, default=ROOT / "analysis_outputs" / "reports" / "lstm_interval_results.csv")
+    parser.add_argument("--out-csv", type=Path, default=ROOT / "EVALUATIONS" / "analysis_outputs" / "reports" / "lstm_interval_results.csv")
     parser.add_argument("--stocks-dir", type=Path, default=lstm.DEFAULT_STOCKS_DIR)
     parser.add_argument("--tickers", nargs="+", default=["AAPL", "AMZN"])
     parser.add_argument("--feature-set", choices=("ohlcv", "extended", "extended_news"), default="extended")

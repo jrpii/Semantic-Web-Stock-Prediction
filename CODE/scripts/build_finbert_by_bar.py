@@ -1,5 +1,5 @@
 # Build FinBERT features per market bar from raw news JSON files.
-# Output: analysis_outputs/cleaned/news/news_finbert_by_bar.csv
+# Output: EVALUATIONS/analysis_outputs/cleaned/news/news_finbert_by_bar.csv
 
 # Read each article text
 # Run FinBERT sentiment (pos/neg/neu)
@@ -18,9 +18,10 @@ import pandas as pd
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-ROOT = Path(__file__).resolve().parents[1]
-OUT_CSV = ROOT / "analysis_outputs" / "cleaned" / "news" / "news_finbert_by_bar.csv"
-DEFAULT_STOCKS_DIR = ROOT / "analysis_outputs" / "cleaned" / "stocks"
+ROOT = Path(__file__).resolve().parents[2]
+EVALUATIONS_DIR = ROOT / "EVALUATIONS" / "analysis_outputs"
+OUT_CSV = EVALUATIONS_DIR / "cleaned" / "news" / "news_finbert_by_bar.csv"
+DEFAULT_STOCKS_DIR = EVALUATIONS_DIR / "cleaned" / "stocks"
 _AAPL_RE = re.compile(r"\b(aapl|nasdaq:aapl|apple|apple inc)\b", re.IGNORECASE)
 _AMZN_RE = re.compile(r"\b(amzn|nasdaq:amzn|amazon|amazon\.com)\b", re.IGNORECASE)
 
@@ -104,7 +105,7 @@ def fix_ssl_env():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--news-json-dir", type=Path, default=ROOT / "datasets" / "News")
+    parser.add_argument("--news-json-dir", type=Path, default=ROOT / "DATA" / "datasets" / "News")
     parser.add_argument("--stocks-dir", type=Path, default=DEFAULT_STOCKS_DIR)
     parser.add_argument("--tickers", nargs="+", default=["AAPL", "AMZN"])
     parser.add_argument("--intervals", nargs="+", type=int, default=[5, 15, 30, 60, 240, 1440])
