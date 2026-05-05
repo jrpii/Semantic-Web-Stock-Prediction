@@ -1,6 +1,7 @@
 const paths = {
   modelResults: "../../EVALUATIONS/analysis_outputs/reports/model_results.csv",
   lstm: "../../EVALUATIONS/analysis_outputs/reports/lstm_interval_results.csv",
+  lstmMulti: "../../EVALUATIONS/analysis_outputs/reports/lstm_multi_interval_results.csv",
   lstmNews: "../../EVALUATIONS/analysis_outputs/reports/lstm_news_interval_results.csv",
   lstmFinbert: "../../EVALUATIONS/analysis_outputs/reports/lstm_finbert_interval_results_ExNeEn.csv",
   stockSummary: "../../EVALUATIONS/analysis_outputs/reports/stock_file_summary.csv",
@@ -75,6 +76,13 @@ async function loadCsv(path) {
   return parseCsv(await response.text());
 }
 
+async function loadOptionalCsv(path) {
+  const response = await fetch(path);
+  if (response.status === 404) return [];
+  if (!response.ok) throw new Error(`Could not load ${path}`);
+  return parseCsv(await response.text());
+}
+
 function formatNumber(value, digits = 2) {
   if (!Number.isFinite(value)) return value || "";
   if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(digits)}M`;
@@ -83,6 +91,7 @@ function formatNumber(value, digits = 2) {
 }
 
 function intervalLabel(dataset) {
+  if (String(dataset).startsWith("ALL_")) return "All targets";
   const interval = String(dataset).split("_")[0].replace("m", "");
   return interval === "1440" ? "1D" : `${interval}m`;
 }
@@ -92,6 +101,7 @@ function datasetType(dataset) {
 }
 
 function modelFamily(model) {
+  if (model === "LSTM_MULTI") return "LSTM Multi-Interval";
   if (model.includes("FINBERT")) return "LSTM + FinBERT";
   if (model.includes("NEWS")) return "LSTM + News";
   if (model === "LSTM") return "LSTM OHLCV";
@@ -99,7 +109,7 @@ function modelFamily(model) {
 }
 
 function combineModels(data) {
-  return [...data.modelResults, ...data.lstm, ...data.lstmNews, ...data.lstmFinbert].map((row) => ({
+  return [...data.modelResults, ...data.lstm, ...data.lstmMulti, ...data.lstmNews, ...data.lstmFinbert].map((row) => ({
     ...row,
     interval: intervalLabel(row.dataset),
     dataset_type: datasetType(row.dataset),
@@ -409,9 +419,10 @@ function renderModelSections() {
 async function init() {
   try {
     document.querySelectorAll(".chart").forEach((chart) => chart.innerHTML = `<div class="loading">Loading data...</div>`);
-    const [modelResults, lstm, lstmNews, lstmFinbert, stockSummary, splits, newsDaily, finbert] = await Promise.all([
+    const [modelResults, lstm, lstmMulti, lstmNews, lstmFinbert, stockSummary, splits, newsDaily, finbert] = await Promise.all([
       loadCsv(paths.modelResults),
       loadCsv(paths.lstm),
+      loadOptionalCsv(paths.lstmMulti),
       loadCsv(paths.lstmNews),
       loadCsv(paths.lstmFinbert),
       loadCsv(paths.stockSummary),
@@ -419,7 +430,7 @@ async function init() {
       loadCsv(paths.newsDaily),
       loadCsv(paths.finbert)
     ]);
-    state.data = { modelResults, lstm, lstmNews, lstmFinbert, stockSummary, splits, newsDaily, finbert };
+    state.data = { modelResults, lstm, lstmMulti, lstmNews, lstmFinbert, stockSummary, splits, newsDaily, finbert };
     renderKpis(state.data);
     renderModelSections();
     renderStockCharts(state.data);
