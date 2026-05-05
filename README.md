@@ -76,6 +76,15 @@ python CODE/scripts/run_lstm_news_all_intervals.py
 python CODE/scripts/run_lstm_finbert_all_intervals.py
 ```
 
+Multi-interval fusion LSTM (one model, six aligned resolutions; multi-task next-bar labels):
+
+```powershell
+python CODE/scripts/train_lstm_multi_interval.py
+python CODE/scripts/run_lstm_multi_interval.py
+```
+
+`train_lstm_multi_interval.py` owns training and console metrics; `run_lstm_multi_interval.py` calls it once and **appends** rows to `EVALUATIONS/analysis_outputs/reports/lstm_multi_interval_results.csv`. Use `--save-model` on the train script to write checkpoints under `EVALUATIONS/analysis_outputs/models/lstm_multi/`.
+
 Generate plots:
 
 ```powershell
@@ -118,6 +127,7 @@ The server is required because the dashboard loads CSV, Markdown, and PNG files 
 - `EVALUATIONS/analysis_outputs/reports/lstm_interval_results.csv`
 - `EVALUATIONS/analysis_outputs/reports/lstm_news_interval_results.csv`
 - `EVALUATIONS/analysis_outputs/reports/lstm_finbert_interval_results_ExNeEn.csv`
+- `EVALUATIONS/analysis_outputs/reports/lstm_multi_interval_results.csv`
 - `EVALUATIONS/analysis_outputs/reports/stock_file_summary.csv`
 - `EVALUATIONS/analysis_outputs/reports/chronological_splits.csv`
 - `EVALUATIONS/analysis_outputs/charts/AAPL_1440m_price_with_model_predictions.png`
